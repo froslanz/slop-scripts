@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="default">
+<head>
+    <meta charset="UTF-8">
+    <title>Multi-Bóveda Cifrada</title>
+    
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/estilos.css') }}">
+</head>
+<body>
+
+    <div class="top-navbar">
+        <h2>📂 Multi-Vault: <span style="color:var(--acento);">{{ boveda_actual or "Ninguna" }}</span></h2>
+        <div class="selector-area">
+            <form action="/cambiar_boveda" method="POST" style="display:inline-flex; gap:5px; margin:0; width:auto;">
+                <select name="boveda_destino" onchange="this.form.submit()" style="width:160px; padding:6px;">
+                    <option value="" {% if not boveda_actual %}selected{% endif %}>-- Cambiar DB --</option>
+                    {% for b in lista_bovedas %}
+                        <option value="{{ b }}" {% if boveda_actual == b %}selected{% endif %}>📁 {{ b }}</option>
+                    {% endfor %}
+                </select>
+            </form>
+            <button onclick="document.getElementById('modalCrear').style.display='block'" style="background:#28a745; padding:6px 12px;">+ Nueva DB</button>
+            <select id="themeSelect" onchange="cambiarTema(this.value)" style="width: auto; padding:6px;">
+                <option value="default">Clean</option>
+                <option value="dark">Dark</option>
+                <option value="system24">System24</option>
+            </select>
+        </div>
+    </div>
+
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for msg in messages %} <div class="alert">{{ msg }}</div> {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <div id="modalCrear" class="card" style="display:none; border: 2px solid var(--acento); position:fixed; top:20%; left:50%; transform:translate(-50%, 0); z-index:100; max-width:450px; width:90%; box-shadow: 0px 4px 20px rgba(0,0,0,0.3);">
+        <h3>🛠️ Crear Nueva Base de Datos / Carpeta</h3>
+        <form action="/crear_boveda" method="POST" style="display:flex; flex-direction:column; gap:10px;">
+            <div>
+                <label>Nombre de la DB:</label>
+                <input type="text" name="nombre_nueva_db" placeholder="ej: tokens, logins" required>
+            </div>
+            <div>
+                <label>Masterkey:</label>
+                <input type="password" name="master_nueva" required>
+            </div>
+            <div>
+                <label>PIN de Emergencia:</label>
+                <input type="password" name="pin_nuevo" pattern="[0-9]+" required>
+            </div>
+            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:10px;">
+                <button type="button" onclick="document.getElementById('modalCrear').style.display='none'" style="background:#dc3545;">Cancelar</button>
+                <button type="submit">Inicializar Carpeta</button>
+            </div>
+        </form>
+    </div>
+
+    {% if no_configurado %}
+    <div class="card" style="border: 2px dashed #ff0055; margin-top: 30px;">
+        <h3>🛠️ Inicializar Bóveda Protegida: "{{ boveda_actual }}"</h3>
+        <form action="/configurar_boveda" method="POST" style="display:flex; flex-direction:column; gap:12px;">
+            <input type="password" name="master_nueva" placeholder="Establecer Masterkey Global" required>
+            <input type="password" name="pin_nuevo" placeholder="Establecer PIN Numérico" pattern="[0-9]+" required>
+            <button type="submit" style="background:#ff0055;">Registrar Firmas Cifradas</button>
+        </form>
+    </div>
+    
+    {% elif not boveda_actual %}
+    <div class="card" style="text-align:center; padding:40px; border:2px dashed var(--borde);">
+        <h3>Bienvenido al Almacén Modular</h3>
+        <p>Selecciona una base de datos arriba o añade una nueva para desplegar el entorno.</p>
+    </div>
+
+    {% else %}
+    <div class="card" style="border: 2px solid var(--acento);">
+        <form action="/login_master" method="POST" style="display: flex; gap: 15px; align-items: center;">
+            <label style="white-space: nowrap; margin-bottom:0; width:auto;"><strong>Masterkey [{{ boveda_actual }}]:</strong></label>
+            <input type="password" name="master_key_input" placeholder="Contraseña..." value="{{ master_actual }}" style="flex-grow:1;">
+            <button type="submit" style="background:#28a745;">Cargar Llave</button>
+            {% if master_actual %}
+                <a href="/logout_master" style="color:#dc3545; font-size:0.9em; text-decoration:none; font-weight:bold; margin-left:10px;">Cerrar</a>
+            {% endif %}
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Añadir Entrada en: {{ boveda_actual }}</h3>
+        <form action="/add" method="POST">
+            <div style="display: flex; gap:15px; margin-bottom: 11px;">
+                <div style="flex: 2;">
+                    <label>Título / Identificador</label>
+                    <input type="text" name="titulo" required>
+                </div>
+                <div style="flex: 1;">
+                    <label>Categoría</label>
+                    <input type="text" name="categoria" placeholder="General">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Campos Dinámicos (<a href="#" onclick="agregarCampo(event)">+ Añadir Renglón</a>)</label>
+                <div id="contenedorCampos">
+                    <div class="campo-dinamico">
+                        <input type="text" name="campo_nombre[]" placeholder="Campo" required>
+                        <input type="text" name="campo_valor[]" placeholder="Valor" required>
+                    </div>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top:20px;">
+                <label style="display:inline-flex; align-items:center; gap:8px; width:auto;">
+                    <input type="checkbox" name="cifrar" value="1" style="width:auto;"> ¿Encriptar campos con Masterkey?
+                </label>
+                <button type="submit">Guardar Entrada</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card" style="background: rgba(0,0,0,0.01);">
+        <details>
+            <summary style="cursor:pointer; font-weight:bold; color: var(--texto-secundario);">⚙️ Controles de Emergencia</summary>
+            <div style="margin-top:20px; border-top:1px dashed var(--borde); padding-top:15px;">
+                <h4 style="color:#dc3545;">Resetear Masterkey con PIN</h4>
+                <form action="/bypass_pin" method="POST" style="display:flex; flex-direction:column; gap:8px; max-width:350px;">
+                    <input type="password" name="pin_verificar" placeholder="PIN Secreto" required>
+                    <input type="password" name="master_fresca" placeholder="Nueva Masterkey" required>
+                    <button type="submit" style="background: #dc3545; color: #fff;">Forzar Reseteo</button>
+                </form>
+            </div>
+        </details>
+    </div>
+
+    <h3>Entradas Indexadas ({{ registros | length }})</h3>
+    <div style="margin-bottom: 60px;">
+        {% for r in registros %}
+        <div class="item-lista">
+            <div class="item-titulo" onclick="toggleItem(this)">
+                <span>📂 {{ r.titulo }} <span class="badge" style="margin-left:10px;">{{ r.categoria }}</span></span>
+                {% if r.cifrado %}
+                    {% if r.bloqueado %}
+                        <span class="badge badge-locked">🔒 Cifrado</span>
+                    {% else %}
+                        <span class="badge badge-unlocked">🔓 Abierto</span>
+                    {% endif %}
+                {% else %}
+                    <span class="badge">🌐 Plano</span>
+                {% endif %}
+            </div>
+            <div class="item-contenido">
+                <a href="/delete/{{ r.id }}" class="btn-delete" onclick="return confirm('¿Seguro que quieres borrar permanentemente este registro?');">🗑️ Borrar</a>
+                
+                {% if r.bloqueado %}
+                    <p style="color:#dc3545; margin:0; font-weight:bold;">⚠️ Introduce tu Masterkey en la barra de arriba para liberar la lectura.</p>
+                {% else %}
+                    <table style="width:100%; border-collapse: collapse; margin-bottom:12px; margin-top: 15px;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid var(--borde); text-align:left;">
+                                <th style="padding: 6px;">Campo</th>
+                                <th style="padding: 6px;">Valor</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for k, v in r.datos.items() %}
+                            <tr style="border-bottom: 1px solid var(--borde);">
+                                <td style="padding: 6px; font-weight:bold; color: var(--acento); width:35%;">{{ k }}</td>
+                                <td style="padding: 6px; font-family: monospace;">{{ v }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    <pre>{{ r.datos | tojson(indent=2) }}</pre>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <script>
+        function agregarCampo(e) {
+            e.preventDefault();
+            const contenedor = document.getElementById('contenedorCampos');
+            const nuevaFila = document.createElement('div');
+            nuevaFila.className = 'campo-dinamico';
+            nuevaFila.innerHTML = `
+                <input type="text" name="campo_nombre[]" placeholder="Campo" required>
+                <input type="text" name="campo_valor[]" placeholder="Valor" required>
+                <button type="button" style="background:#dc3545; padding:4px 8px;" onclick="this.parentElement.remove()">X</button>
+            `;
+            contenedor.appendChild(nuevaFila);
+        }
+        function toggleItem(elemento) {
+            const contenido = elemento.nextElementSibling;
+            if(contenido) {
+                contenido.style.display = (contenido.style.display === "block") ? "none" : "block";
+            }
+        }
+        function cambiarTema(tema) {
+            document.documentElement.setAttribute('data-theme', tema);
+            localStorage.setItem('db-ui-theme', tema);
+        }
+        const temaActivo = localStorage.getItem('db-ui-theme') || 'default';
+        const select = document.getElementById('themeSelect');
+        if(select) { select.value = temaActivo; cambiarTema(temaActivo); }
+    </script>
+</body>
+</html>
